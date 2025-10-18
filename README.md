@@ -1,0 +1,1 @@
+SpecKit documentation mirror for private sync.
