@@ -448,7 +448,7 @@ orders (```
 
 ### Phase 2 (3-6 months): Trust & Retention Features
 
-**Priority**: Build trust through authenticity and CHW support**Repository**: [jibonflow](https://github.com/Asim971/jibonflow)  
+**Priority**: Build trust through authenticity and CHW support**Repository**: [jibonflow-platform](https://github.com/Asim971/jibonflow-platform)  
 
 **Live Site**: [jibonflow.github.io](https://asim971.github.io/jibonflow/)  
 
