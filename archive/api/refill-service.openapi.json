@@ -1,0 +1,624 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "RefillService API",
+    "version": "1.0.0",
+    "description": "HIPAA-compliant medication refill management API with complete request lifecycle from patient initiation through pharmacy transmission",
+    "contact": {
+      "name": "JibonFlow Team",
+      "url": "https://jibonflow.com"
+    },
+    "license": {
+      "name": "Proprietary",
+      "url": "https://jibonflow.com/license"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.jibonflow.com/api/v1",
+      "description": "Production"
+    },
+    {
+      "url": "https://staging.jibonflow.com/api/v1",
+      "description": "Staging"
+    },
+    {
+      "url": "http://localhost:3001/api/v1",
+      "description": "Development"
+    }
+  ],
+  "paths": {
+    "/refills": {
+      "post": {
+        "summary": "Create Refill Request",
+        "description": "Patient initiates a new prescription refill request",
+        "operationId": "createRefillRequest",
+        "tags": ["Refills"],
+        "security": [{"BearerAuth": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/CreateRefillDTO"},
+              "example": {
+                "prescriptionId": "rx-123456",
+                "patientId": "patient-789",
+                "quantity": 30,
+                "reason": "Running low on medication"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Refill request created successfully",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/RefillRequest"},
+                "example": {
+                  "id": "refill-1635534600-abc123",
+                  "prescriptionId": "rx-123456",
+                  "patientId": "patient-789",
+                  "status": "pending",
+                  "quantityRequested": 30,
+                  "maxRefillsRemaining": 5,
+                  "reasonForRequest": "Running low on medication",
+                  "requestedAt": "2025-10-16T14:30:00Z",
+                  "createdAt": "2025-10-16T14:30:00Z"
+                }
+              }
+            }
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "409": {"$ref": "#/components/responses/Conflict"}
+        }
+      },
+      "get": {
+        "summary": "List Pending Refills",
+        "description": "Provider retrieves pending refill requests for review (filtered by authorized patients)",
+        "operationId": "listRefillRequests",
+        "tags": ["Refills"],
+        "security": [{"BearerAuth": []}],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["pending", "approved", "denied", "fulfilled"]
+            },
+            "description": "Filter by refill status"
+          },
+          {
+            "name": "patientId",
+            "in": "query",
+            "required": false,
+            "schema": {"type": "string"},
+            "description": "Filter by specific patient (must be authorized)"
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["createdAt", "status"]
+            },
+            "description": "Sort results by field"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20},
+            "description": "Results per page"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {"type": "integer", "minimum": 0, "default": 0},
+            "description": "Pagination offset"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of refill requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {"type": "array", "items": {"$ref": "#/components/schemas/RefillRequest"}},
+                    "pagination": {"$ref": "#/components/schemas/Pagination"}
+                  }
+                }
+              }
+            }
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
+        }
+      }
+    },
+    "/refills/{id}": {
+      "get": {
+        "summary": "Get Refill Status",
+        "description": "Get current status and details of a specific refill request",
+        "operationId": "getRefillStatus",
+        "tags": ["Refills"],
+        "security": [{"BearerAuth": []}],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string"},
+            "description": "Refill request ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Refill status details",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/RefillStatusDetail"}
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"}
+        }
+      }
+    },
+    "/refills/{id}/approve": {
+      "patch": {
+        "summary": "Approve Refill",
+        "description": "Provider approves a pending refill request (with optional dosage modification)",
+        "operationId": "approveRefill",
+        "tags": ["Refills"],
+        "security": [{"BearerAuth": []}],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string"},
+            "description": "Refill request ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/ApprovalDTO"},
+              "example": {
+                "status": "approved",
+                "dosageChange": {
+                  "doseQuantity": 10,
+                  "doseUnit": "mg"
+                },
+                "notes": "Approved at patient request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Refill approved successfully",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/RefillRequest"}
+              }
+            }
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "422": {"$ref": "#/components/responses/UnprocessableEntity"}
+        }
+      }
+    },
+    "/refills/{id}/deny": {
+      "patch": {
+        "summary": "Deny Refill",
+        "description": "Provider denies a pending refill request with structured reason",
+        "operationId": "denyRefill",
+        "tags": ["Refills"],
+        "security": [{"BearerAuth": []}],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string"},
+            "description": "Refill request ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/DenialDTO"},
+              "example": {
+                "status": "denied",
+                "reason": "drug_interaction",
+                "notes": "Interacts with current blood pressure medication",
+                "recommendation": "Switch to alternative antihypertensive"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Refill denied successfully",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/RefillRequest"}
+              }
+            }
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "422": {"$ref": "#/components/responses/UnprocessableEntity"}
+        }
+      }
+    },
+    "/refills/{id}/transmit": {
+      "post": {
+        "summary": "Transmit Refill to Pharmacy",
+        "description": "System endpoint to transmit approved refills to pharmacy",
+        "operationId": "transmitRefill",
+        "tags": ["Refills"],
+        "security": [{"BearerAuth": []}],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string"},
+            "description": "Refill request ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Refill transmitted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {"type": "string"},
+                    "status": {"type": "string"},
+                    "transmissionStatus": {"type": "string"},
+                    "transmissionSentAt": {"type": "string", "format": "date-time"},
+                    "message": {"type": "string"}
+                  }
+                }
+              }
+            }
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"}
+        }
+      }
+    },
+    "/refills/patient/{id}/history": {
+      "get": {
+        "summary": "Get Patient Refill History",
+        "description": "Get refill history for a specific patient (with pagination and date range filtering)",
+        "operationId": "getRefillHistory",
+        "tags": ["Refills"],
+        "security": [{"BearerAuth": []}],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string"},
+            "description": "Patient ID"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {"type": "integer", "minimum": 1, "maximum": 100, "default": 50},
+            "description": "Results per page"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {"type": "integer", "minimum": 0, "default": 0},
+            "description": "Pagination offset"
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "required": false,
+            "schema": {"type": "string", "format": "date-time"},
+            "description": "Date range start (ISO 8601, default: 1 year ago)"
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "required": false,
+            "schema": {"type": "string", "format": "date-time"},
+            "description": "Date range end (ISO 8601, default: today)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Patient refill history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {"type": "array", "items": {"$ref": "#/components/schemas/RefillHistory"}},
+                    "pagination": {"$ref": "#/components/schemas/Pagination"}
+                  }
+                }
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"}
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT Bearer token. Token format: Authorization: Bearer {token}"
+      }
+    },
+    "schemas": {
+      "RefillRequest": {
+        "type": "object",
+        "required": ["id", "prescriptionId", "patientId", "status", "maxRefillsRemaining", "requestedAt", "createdAt"],
+        "properties": {
+          "id": {"type": "string", "description": "Unique refill request ID"},
+          "prescriptionId": {"type": "string", "description": "Associated prescription ID"},
+          "patientId": {"type": "string", "description": "Patient who requested refill"},
+          "status": {
+            "type": "string",
+            "enum": ["pending", "approved", "denied", "approved_pending_transmission", "approved_transmission_sent", "fulfilled"],
+            "description": "Current refill status"
+          },
+          "quantityRequested": {"type": "integer", "description": "Requested quantity"},
+          "quantityApproved": {"type": "integer", "description": "Provider-approved quantity"},
+          "maxRefillsOriginal": {"type": "integer", "description": "Original authorized refills"},
+          "maxRefillsRemaining": {"type": "integer", "description": "Refills remaining on prescription"},
+          "reasonForRequest": {"type": "string", "description": "Patient's reason for request"},
+          "denialReason": {
+            "type": "string",
+            "enum": ["contraindication", "drug_interaction", "dosage_concern", "patient_non_compliant", "provider_request", "other"],
+            "description": "Reason if denied"
+          },
+          "denialNotes": {"type": "string", "description": "Detailed denial notes"},
+          "recommendation": {"type": "string", "description": "Provider's recommendation"},
+          "dosageChange": {"type": "object", "description": "Dosage modification if approved"},
+          "requestedById": {"type": "string", "description": "User ID who created request"},
+          "requestedAt": {"type": "string", "format": "date-time", "description": "Request creation timestamp"},
+          "approvedById": {"type": "string", "description": "Provider who approved"},
+          "approvedAt": {"type": "string", "format": "date-time", "description": "Approval timestamp"},
+          "deniedById": {"type": "string", "description": "Provider who denied"},
+          "deniedAt": {"type": "string", "format": "date-time", "description": "Denial timestamp"},
+          "transmissionSentAt": {"type": "string", "format": "date-time", "description": "Pharmacy transmission timestamp"},
+          "transmissionStatus": {
+            "type": "string",
+            "enum": ["pending", "sent", "acked", "failed"],
+            "description": "Pharmacy transmission status"
+          },
+          "filledAt": {"type": "string", "format": "date-time", "description": "Fulfillment timestamp"},
+          "createdAt": {"type": "string", "format": "date-time", "description": "Creation timestamp"},
+          "updatedAt": {"type": "string", "format": "date-time", "description": "Last update timestamp"}
+        }
+      },
+      "CreateRefillDTO": {
+        "type": "object",
+        "required": ["prescriptionId", "patientId"],
+        "properties": {
+          "prescriptionId": {"type": "string", "description": "Prescription ID to refill"},
+          "patientId": {"type": "string", "description": "Patient ID (must match auth context)"},
+          "quantity": {"type": "integer", "description": "Requested quantity (optional)"},
+          "reason": {"type": "string", "description": "Reason for refill (optional)"}
+        }
+      },
+      "ApprovalDTO": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": {"type": "string", "enum": ["approved"], "description": "Must be 'approved'"},
+          "dosageChange": {
+            "type": "object",
+            "properties": {
+              "doseQuantity": {"type": "number", "description": "New dose quantity"},
+              "doseUnit": {"type": "string", "description": "Dose unit (mg, mcg, etc.)"}
+            },
+            "description": "Optional dosage modification"
+          },
+          "notes": {"type": "string", "description": "Approval notes"}
+        }
+      },
+      "DenialDTO": {
+        "type": "object",
+        "required": ["status", "reason"],
+        "properties": {
+          "status": {"type": "string", "enum": ["denied"], "description": "Must be 'denied'"},
+          "reason": {
+            "type": "string",
+            "enum": ["contraindication", "drug_interaction", "dosage_concern", "patient_non_compliant", "provider_request", "other"],
+            "description": "Structured denial reason"
+          },
+          "notes": {"type": "string", "description": "Detailed denial notes"},
+          "recommendation": {"type": "string", "description": "Provider's clinical recommendation"}
+        }
+      },
+      "RefillHistory": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "string", "description": "Refill ID"},
+          "prescriptionId": {"type": "string", "description": "Prescription ID"},
+          "status": {"type": "string", "description": "Current status"},
+          "requestedAt": {"type": "string", "format": "date-time", "description": "Request timestamp"},
+          "approvedAt": {"type": "string", "format": "date-time", "description": "Approval timestamp (if approved)"},
+          "deniedAt": {"type": "string", "format": "date-time", "description": "Denial timestamp (if denied)"},
+          "filledAt": {"type": "string", "format": "date-time", "description": "Fulfillment timestamp (if filled)"},
+          "transmissionStatus": {"type": "string", "description": "Pharmacy transmission status"}
+        }
+      },
+      "RefillStatusDetail": {
+        "type": "object",
+        "properties": {
+          "status": {"type": "string", "description": "Current status"},
+          "statusDetail": {"type": "string", "description": "Human-readable status detail"},
+          "transmissionStatus": {"type": "string", "description": "Pharmacy transmission status"},
+          "filledAt": {"type": "string", "format": "date-time", "description": "Fulfillment timestamp"},
+          "lastUpdated": {"type": "string", "format": "date-time", "description": "Last update timestamp"}
+        }
+      },
+      "Pagination": {
+        "type": "object",
+        "properties": {
+          "count": {"type": "integer", "description": "Items in current page"},
+          "hasMore": {"type": "boolean", "description": "Whether more results available"},
+          "limit": {"type": "integer", "description": "Items per page"},
+          "offset": {"type": "integer", "description": "Current offset"}
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {"type": "string", "description": "Error code"},
+          "message": {"type": "string", "description": "Error message"},
+          "details": {
+            "type": "object",
+            "description": "Additional error details"
+          },
+          "timestamp": {"type": "string", "format": "date-time", "description": "Error timestamp"},
+          "requestId": {"type": "string", "description": "Request tracking ID"}
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Bad Request - Invalid input data",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/Error"},
+            "example": {
+              "code": "INVALID_REQUEST",
+              "message": "Prescription has expired",
+              "details": {"field": "prescriptionId"},
+              "timestamp": "2025-10-16T16:00:00Z"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Unauthorized - Missing or invalid token",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/Error"},
+            "example": {
+              "code": "UNAUTHORIZED",
+              "message": "Missing authorization token",
+              "timestamp": "2025-10-16T16:00:00Z"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Forbidden - Insufficient permissions",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/Error"},
+            "example": {
+              "code": "FORBIDDEN",
+              "message": "Patients can only access their own refill history",
+              "timestamp": "2025-10-16T16:00:00Z"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Not Found - Resource doesn't exist",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/Error"},
+            "example": {
+              "code": "NOT_FOUND",
+              "message": "Refill request not found",
+              "timestamp": "2025-10-16T16:00:00Z"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "Conflict - Resource conflict",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/Error"},
+            "example": {
+              "code": "CONFLICT",
+              "message": "Duplicate refill request detected",
+              "timestamp": "2025-10-16T16:00:00Z"
+            }
+          }
+        }
+      },
+      "UnprocessableEntity": {
+        "description": "Unprocessable Entity - Business logic violation",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/Error"},
+            "example": {
+              "code": "UNPROCESSABLE",
+              "message": "Provider not authorized for this patient",
+              "timestamp": "2025-10-16T16:00:00Z"
+            }
+          }
+        }
+      },
+      "ServiceUnavailable": {
+        "description": "Service Unavailable - Pharmacy service down",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/Error"},
+            "example": {
+              "code": "SERVICE_UNAVAILABLE",
+              "message": "Pharmacy service temporarily unavailable",
+              "timestamp": "2025-10-16T16:00:00Z"
+            }
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Refills",
+      "description": "RefillService endpoints for managing prescription refill requests"
+    }
+  ]
+}
